@@ -11,16 +11,16 @@ locusfile: csv-file setting the boundaries of the finemap plots; columns: chunk,
 snplist: file with 1 snp per row
 
 Call pipeline with:
-nextflow run main.nf /
--profile local/medcluster / 
---boundaries /home/user/finepipe/example/locusfile.sample /
---snps /home/user/finepipe/example/snplist.sample /
---reference /home/user/finepipe/example/GerNorItaSpa.chr3 /
---sumstats /home/user/finepipe/example/sumstats.sample /
---nsum 15743 /
---nsignal 1 /
---ld r2 /
---method sss /
+nextflow run main.nf 
+-profile local/medcluster 
+--boundaries /home/user/finepipe/example/locusfile.sample 
+--snps /home/user/finepipe/example/snplist.sample 
+--reference /home/user/finepipe/example/GerNorItaSpa.chr3 
+--sumstats /home/user/finepipe/example/sumstats.sample 
+--nsum 15743 
+--nsignal 1 
+--ld r2 
+--method sss 
 -resume  
 
 If locally, download the locuszoom database and set it with:
