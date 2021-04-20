@@ -1,1 +1,8 @@
 bin/finemap_v1.4_x86_64
+finemap1.4_pipe_v0.1.1/
+finepipe.sif
+.nextflow.log*
+.nextflow/
+work/
+example/
+Singularity.def
