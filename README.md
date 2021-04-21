@@ -13,7 +13,7 @@ Pipeline needs 6 input files:<br />
 ### Usage:
 Call pipeline with:<br />
 ```bash
-nextflow run main.nf -profile standard --locus /home/user/finepipe/example/locusfile.sample --snps /home/user/finepipe/example/snplist.sample --reference /home/user/finepipe/example/GerNorItaSpa.chr3 --sumstats /home/user/finepipe/example/sumstats.sample --nsum 15743 --nsignal 1 --ld r2 --method sss -resume  
+nextflow run main.nf -profile standard --locus /home/user/finepipe/example/locusfile.sample --snps /home/user/finepipe/example/snplist.sample --reference /home/user/finepipe/example/GerNorItaSpa.chr3 --sumstats /home/user/finepipe/example/sumstats.sample --nsum 15743 --nsignal 1 --method sss -resume  
 ```
 #### Mandatory:
 **--locus** "path/to/locus.file"<br />
