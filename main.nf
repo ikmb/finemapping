@@ -75,7 +75,7 @@ if (params.help){
 }
 
 process find_chunks {
-    //scratch true
+    scratch true
     label 'Rscript'
     input:
     output:
@@ -94,7 +94,7 @@ chunk_tbl_ch.splitCsv(header: true, sep:',').map{it ->[it.chunk,it.first_gene_st
 
 
 process sort.snplist {
-  //scratch true
+  scratch true
   input:
   output:
   file(sorted) into snplist_sorted_ch
@@ -110,7 +110,7 @@ process sort.snplist {
 Channel.fromPath(params.sumstats, checkIfExists: true).into{ summarystats_ch; summarystats_ch2 }
 
 process subset_sumstats {
-    //scratch true
+    scratch true
     beforeScript 'ulimit -Ss unlimited'   
     input:
     tuple chunk,first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from chunks_ch2
@@ -155,7 +155,7 @@ key_zfile_ch.into{key_zfile_ch1;key_zfile_ch2}
 key_zfile_ch2.join(key_snplist_ch).join(chunks_ch3).into{plink_input_ch;plink_input_ch2}
 
 process plink {
-    //scratch true
+    scratch true
     label 'plink'
     input:
     tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from plink_input_ch
@@ -176,7 +176,7 @@ plink_output.into{plink_output1;plink_output2}
 key_zfile_ch1.join(plink_output2).into{joinedzfileld_ch;joinedzfileld_ch2}
 
 process master {
-    //scratch true
+    scratch true
     input:
     set val(chunk),val(zfile), val(ldfile) from joinedzfileld_ch
     output:
@@ -196,7 +196,7 @@ master_output_ch.set{master_output_ch1}
 identifier_ch.combine(master_output_ch1).set{finemap_input_ch}
 
 process finemap {
-    //scratch true
+    scratch true
     label 'finemap'
     publishDir "${params.output}/${datasetID}/${chunk}/cred/", mode: 'copy'
     input:
@@ -230,7 +230,7 @@ finemap_output_ch.combine(identifier_ch2).into{prep_finemap_locuszoom_ch;prep_fi
 joinedzfileld_ch2.join(prep_finemap_locuszoom_ch).set{prep_finemap_locuszoom_input}
 
 process prep_finemap_locuszoom {
-   // scratch true
+    scratch true
     label 'Rscript'
     input:
     tuple val(chunk),file(zfile), val(ldfile), file(finemap),val(datasetID), path(datasetFile) from prep_finemap_locuszoom_input
@@ -249,7 +249,7 @@ plink_input_ch2.join(prep_finemap_locuszoom_ch2).join(prep_finemap_locuszoom_out
 
 if(params.dprime){
   process get_dprime_from_single_SNP {
-      //scratch true
+      scratch true
       label 'locuszoom'
       publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
       input:
@@ -276,7 +276,7 @@ if(params.dprime){
   }
 }else{
   process get_r2_from_single_SNP {
-      //scratch true
+      scratch true
       label 'locuszoom'
       publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
       input:
