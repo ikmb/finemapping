@@ -13,9 +13,9 @@ def helpMessage() {
   =================================================================
   Usage:
   The typical command for running the pipeline is as follows:
-  nextflow run IKMB/Finepipe --boundaries '/path/to/locusfile.sample' 
+  nextflow run IKMB/Finepipe --locus '/path/to/locusfile.sample' 
   Mandatory arguments:
-  --boundaries 		The path to the .csv-File containing following 
+  --locus 		The path to the .csv-File containing following 
                     columns: chunk,NSNP,chr,st,sp,PPA_3
 
   --sumstats        Summary stats
@@ -54,7 +54,7 @@ log.info "F I N E P I P E"
 log.info "IKMB pipeline version v${workflow.manifest.version}" 
 log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
-log.info "Boundries-File:		${params.boundaries}"
+log.info "Boundries-File:		${params.locus}"
 log.info "Summary stats:    ${params.sumstats}"
 log.info "Reference population:   ${params.reference}"
 log.info "SNPs in the loci: 		${params.snps}"
@@ -91,7 +91,7 @@ process find_chunks {
     chunk_chunk = "chunk_chunk.csv"
     chunk_tbl = "chunk_tbl.csv"
     """
-    Rscript $baseDir/bin/find_chunks.R ${params.boundaries} ${params.sumstats} ${params.reference}
+    Rscript $baseDir/bin/find_chunks.R ${params.locus} ${params.sumstats} ${params.reference}
     """ 
 }
 
