@@ -41,8 +41,8 @@ def helpMessage() {
   
 
   Optonal arguments:
-  --ld              result in (r2 (default) or d-prime)
-  -profile      	The nextflow execution profile to use (local or medcluster)
+  --dprime        result in d-prime instead of r2
+  -profile      	The nextflow execution profile to use, standard is medcluster ("local" or "standard")
   """.stripIndent()
 }
 
@@ -58,7 +58,7 @@ log.info "SNPs in the loci: 		${params.snps}"
 log.info "Number of probands: 		${params.nsum}"
 log.info "Finemap method: 		${params.method}"
 log.info "Number of signals: 		${params.nsignal}"
-log.info "LD method: 		${params.ld}"
+log.info "dprime instead of r2:    ${params.dprime}"
 log.info "LocusZoom DB    ${params.locuszoomdb}"
 log.info "Output directory: 		${params.output}"
 log.info "=========================================="
@@ -247,27 +247,55 @@ process prep_finemap_locuszoom {
 
 plink_input_ch2.join(prep_finemap_locuszoom_ch2).join(prep_finemap_locuszoom_output_ch).join(metal_ch).set{get_r2_from_single_SNP_input}
 
-process get_r2_from_single_SNP {
-    //scratch true
-    label 'locuszoom'
-    publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
-    input:
-    each file(summarystats) from summarystats_ch2
-    tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
-    output:
-    file('**/*')
-    shell:
-    rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
-    chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
-    outputdir="${chunk}_chr${CHR}_*"
-    """
-    plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
-    cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
-    /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
-	
-    """ 
-}
+if(params.dprime){
+  process get_dprime_from_single_SNP {
+      //scratch true
+      label 'locuszoom'
+      publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
+      input:
+      each file(summarystats) from summarystats_ch2
+      tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
+      output:
+      file('**/*')
+      shell:
+      rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
+      chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
+      outputdir="${chunk}_chr${CHR}_*"
+      """
+      plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr dprime --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
+      cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " " \$8}' > $chunkleadsnpld
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date
+    
+      """ 
 
+      /*
+      plink --bfile ../../$3 --extract ../results_$2/$2$chunk.snplist --r2 inter-chr dprime --ld-snp $snp1 --ld-window-r2 0 --a1-allele ../results_$2/$2"$filetag".z 4 1 --from-kb $pl_left_bound --to-kb $pl_right_bound --chr $chromosome --out raw$2.$chunk.$snp1 --threads 4
+      cat raw$2.$chunk.$snp1.ld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print $6 " " $3 " " $7 " " $8}' > $2.$chunk.$snp1.ld
+      locuszoom --metal ../../../$1.metal --refsnp $snp1 --chr $chromosome --start $left_bound --end $right_bound --prefix $chunk --build hg38 --ld ../$2.$chunk.$snp1.ld  fineMap="../$2$chunk.cred.zoom" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime"
+      */
+  }
+}else{
+  process get_r2_from_single_SNP {
+      //scratch true
+      label 'locuszoom'
+      publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
+      input:
+      each file(summarystats) from summarystats_ch2
+      tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
+      output:
+      file('**/*')
+      shell:
+      rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
+      chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
+      outputdir="${chunk}_chr${CHR}_*"
+      """
+      plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
+      cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
+    
+      """ 
+  }
+}
 workflow.onComplete { 
 	log.info ( workflow.success ? "\nDone! Open the following directory for the outputs --> $params.output\n" : "Oops .. something went wrong" )
 }
