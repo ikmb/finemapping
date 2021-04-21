@@ -1,10 +1,7 @@
 #!/usr/bin/env nextflow
 // -*- mode:groovy -*-
 
-
-
 //TODO:chunk size test
-
 
 def helpMessage() {
   log.info"""
@@ -58,7 +55,6 @@ log.info "Boundries-File:		${params.locus}"
 log.info "Summary stats:    ${params.sumstats}"
 log.info "Reference population:   ${params.reference}"
 log.info "SNPs in the loci: 		${params.snps}"
-//log.info "Identifier       ${params.identifier}"
 log.info "Number of probands: 		${params.nsum}"
 log.info "Finemap method: 		${params.method}"
 log.info "Number of signals: 		${params.nsignal}"
@@ -83,7 +79,6 @@ process find_chunks {
     label 'Rscript'
     input:
     output:
-    //file(chunk_chunk) into chunk_chunk_ch
     file(chunk_tbl) into chunk_tbl_ch
     
     script:
@@ -99,6 +94,7 @@ chunk_tbl_ch.splitCsv(header: true, sep:',').map{it ->[it.chunk,it.first_gene_st
 
 
 process sort.snplist {
+  //scratch true
   input:
   output:
   file(sorted) into snplist_sorted_ch
@@ -112,7 +108,6 @@ process sort.snplist {
 }
 
 Channel.fromPath(params.sumstats, checkIfExists: true).into{ summarystats_ch; summarystats_ch2 }
-//summarystats_ch.view()
 
 process subset_sumstats {
     //scratch true
@@ -122,14 +117,10 @@ process subset_sumstats {
     each file(sorted) from snplist_sorted_ch
     each file(summarystats) from summarystats_ch
     output:
-    //file(zraw) into zraw_ch
-    //file(snplistraw)
     set val(chunk),file(snplist) into key_snplist_ch
     file(zfile) into zfile_ch
     set val(chunk),file(zfile) into key_zfile_ch
-    //file(metal)
     tuple val(chunk), file(metal) into metal_ch
-    //val(chunk) into chunk_val_ch
     shell:
     
     chromosome=CHR
@@ -183,9 +174,9 @@ process plink {
 plink_output.into{plink_output1;plink_output2}
 
 key_zfile_ch1.join(plink_output2).into{joinedzfileld_ch;joinedzfileld_ch2}
+
 process master {
     //scratch true
-
     input:
     set val(chunk),val(zfile), val(ldfile) from joinedzfileld_ch
     output:
@@ -197,11 +188,6 @@ process master {
     echo "$zfile;$ldfile;${chunk}.snp;${chunk}.config;${chunk}.cred;${chunk}.log;${params.nsum}" >> $output
     """ 
 }
-
-//$3 identifier ${params.reference}"
-// $7 sss ${params.method}"
-// $8 1
- // 2> error_finemap.log
 
 Channel.fromPath(params.reference).map { file -> tuple(file.baseName, file) }.into{identifier_ch;identifier_ch2}
 
@@ -217,7 +203,6 @@ process finemap {
     tuple datasetID, datasetFile, val(chunk), file(finemap_output) from finemap_input_ch
     output:
     file(error_finemap) optional true 
-    //set val(chunk), file(NAME) into finemap_output_ch
     file('*.cred*')
     set val(chunk), file(NAME) into finemap_output_ch
     shell:
@@ -240,22 +225,10 @@ process finemap {
     '''
 }
 
-//finemap_output_ch.view()
-/*
-$3 identifier ${params.reference}"
-$7 sss ${params.method}"
-$8  n signal  ${params.nsignal}"
- 2> error_prep_finemap_locuszoom.log
- Rscript prep_finemap_locuszoom.R 
-*/
-
-//"${params.output}/${ID}/${chunk}/cred/"
-
-
-//identifier_ch2.combine(finemap_output_ch).view().into{prep_finemap_locuszoom_ch;prep_finemap_locuszoom_ch2}
-
 finemap_output_ch.combine(identifier_ch2).into{prep_finemap_locuszoom_ch;prep_finemap_locuszoom_ch2}
+
 joinedzfileld_ch2.join(prep_finemap_locuszoom_ch).set{prep_finemap_locuszoom_input}
+
 process prep_finemap_locuszoom {
    // scratch true
     label 'Rscript'
@@ -273,17 +246,16 @@ process prep_finemap_locuszoom {
 }
 
 plink_input_ch2.join(prep_finemap_locuszoom_ch2).join(prep_finemap_locuszoom_output_ch).join(metal_ch).set{get_r2_from_single_SNP_input}
+
 process get_r2_from_single_SNP {
     //scratch true
     label 'locuszoom'
     publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
     input:
     each file(summarystats) from summarystats_ch2
-    
     tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
     output:
     file('**/*')
-    //file(finemap_output) into finemap_output
     shell:
     rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
     chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
