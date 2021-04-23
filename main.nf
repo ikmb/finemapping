@@ -118,7 +118,6 @@ process subset_sumstats {
     each file(summarystats) from summarystats_ch
     output:
     set val(chunk),file(snplist) into key_snplist_ch
-    file(zfile) into zfile_ch
     set val(chunk),file(zfile) into key_zfile_ch
     tuple val(chunk), file(metal) into metal_ch
     shell:
@@ -148,8 +147,6 @@ process subset_sumstats {
     """
 } 
 
-zfile_ch.into{zfile_ch1;zfile_ch2}
-
 key_zfile_ch.into{key_zfile_ch1;key_zfile_ch2}
 
 key_zfile_ch2.join(key_snplist_ch).join(chunks_ch3).into{plink_input_ch;plink_input_ch2}
@@ -171,9 +168,8 @@ process plink {
     """ 
 }
 
-plink_output.into{plink_output1;plink_output2}
 
-key_zfile_ch1.join(plink_output2).into{joinedzfileld_ch;joinedzfileld_ch2}
+key_zfile_ch1.join(plink_output).into{joinedzfileld_ch;joinedzfileld_ch2}
 
 process master {
     scratch true
@@ -195,42 +191,77 @@ master_output_ch.set{master_output_ch1}
 
 identifier_ch.combine(master_output_ch1).set{finemap_input_ch}
 
-process finemap {
-    scratch true
-    label 'finemap'
-    publishDir "${params.output}/${datasetID}/${chunk}/cred/", mode: 'copy'
-    input:
-    tuple datasetID, datasetFile, val(chunk), file(finemap_output) from finemap_input_ch
-    output:
-    file(error_finemap) optional true 
-    file('*.cred*')
-    set val(chunk), file(NAME) into finemap_output_ch
-    shell:
-    error_finemap="error_finemap.log"
-    NAME=chunk+".cred"+params.nsignal
-    
-    '''
-    NAME=!{chunk}".cred"!{params.nsignal}
-    j=0
-    while [ ! -f $NAME ] && [ $j -lt 10 ]
-    do
-      if [ "!{params.method}" == "sss" ]; then
-        !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} 
-        j=$(( $j + 1 ))
-      else
-			  !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} --cond-pvalue 0.0001
-        j = $(( $j + 1 ))
-      fi
-    done
-    '''
+if(params.method == "sss"){
+  process finemap_sss {
+      scratch true
+      label 'finemap'
+      publishDir "${params.output}/${datasetID}/${chunk}/cred/", mode: 'copy'
+      input:
+      tuple datasetID, datasetFile, val(chunk), file(finemap_output) from finemap_input_ch
+      output:
+      file(error_finemap) optional true 
+      file('*.cred*')
+      file('*.cred') optional true
+      set val(chunk), file(NAME) into finemap_output_ch
+      shell:
+      error_finemap="error_finemap.log"
+      NAME=chunk+".cred"+params.nsignal
+      
+      '''
+      NAME=!{chunk}".cred"!{params.nsignal}
+      j=0
+      while [ ! -f $NAME ] && [ $j -lt 10 ]
+      do
+        if [ "!{params.method}" == "sss" ]; then
+          !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} 
+          j=$(( $j + 1 ))
+        else
+          !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} --cond-pvalue 0.0001
+          j=$(( $j + 1 ))
+        fi
+      done
+      '''
+  }
+}else{
+    process finemap_cond {
+      scratch true
+      label 'finemap'
+      publishDir "${params.output}/${datasetID}/${chunk}/cred/", mode: 'copy'
+      input:
+      tuple datasetID, datasetFile, val(chunk), file(finemap_output) from finemap_input_ch
+      output:
+      file(error_finemap) optional true 
+      file('*.cred*') optional true
+      file('*.cred') optional true
+      set val(chunk), file(NAME) into finemap_output_ch
+      shell:
+      error_finemap="error_finemap.log"
+      NAME=chunk+".cred"
+      
+      '''
+      NAME=!{chunk}".cred"!{params.nsignal}
+      j=0
+      while [ ! -f $NAME ] && [ $j -lt 10 ]
+      do
+        if [ "!{params.method}" == "sss" ]; then
+          !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} 
+          j=$(( $j + 1 ))
+        else
+          !{baseDir}/bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64 --!{params.method} --in-files !{finemap_output} --log --n-causal-snps !{params.nsignal} --cond-pvalue 0.0001
+          j=$(( $j + 1 ))
+        fi
+      done
+      '''
+  }
 }
+
 
 finemap_output_ch.combine(identifier_ch2).into{prep_finemap_locuszoom_ch;prep_finemap_locuszoom_ch2}
 
 joinedzfileld_ch2.join(prep_finemap_locuszoom_ch).set{prep_finemap_locuszoom_input}
 
 process prep_finemap_locuszoom {
-    scratch true
+    //scratch true
     label 'Rscript'
     input:
     tuple val(chunk),file(zfile), val(ldfile), file(finemap),val(datasetID), path(datasetFile) from prep_finemap_locuszoom_input
@@ -264,7 +295,7 @@ if(params.dprime){
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr dprime --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " " \$8}' > $chunkleadsnpld
-      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date --ld-measure 'dprime'
     
       """ 
 

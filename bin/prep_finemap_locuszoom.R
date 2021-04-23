@@ -33,7 +33,8 @@ fmapforlocuszoom<-function(tag=tag,output_dir){
       if(file.exists(paste0(tag,".cred",n_highest_given))){
         filename_cred <- paste0(tag,".cred",n_highest_given)
         print(paste0(tag,".cred",n_highest_given))
-      }
+      }else{filename_cred <- paste0(tag,".cred")}
+    
       #filename_cred <- paste0(output_dir,"results_",tag,"/",tag,".cred")
       sum_stats <- fread(filename_sum_stats)
       print("sumstats read in")
