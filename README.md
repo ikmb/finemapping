@@ -5,7 +5,6 @@
 Download this pipeline locally or on the medcluster.<br />
 Install finemap_v1.4_x86_64.tgz within the bin folder so finemap is located in bin/finemap_v1.4_x86_64/finemap_v1.4_x86_64.<br />
 
-
 ### Usage:
 Pipeline needs 6 input files:<br />
 **Reference**: in bim, bed, fam (3 files with same basename)<br />
@@ -25,12 +24,11 @@ nextflow run main.nf -profile standard --locus /home/user/finepipe/example/locus
 **--nsignal**   N of max signals<br />
 
 If you run it locally, download the locuszoom database and set it with:<br />
-**--locuszoomdb** "/path/to/locuszoom_hg38.db"<br />
-and set profile to local:
+**--locuszoomdb** "/path/to/locuszoom/data/database/locuszoom_hg38.db"<br />
+and set profile to local:<br />
 **-profile**    "local" or "standard"<br />
 
 #### Optional:
 **--dprime**    sets ld method from the default r² to dprime<br />
 **--output** "/path/to/output" if not set output is baseDir/Results<br />
 **-resume** Continue a run with cached processes<br />
-

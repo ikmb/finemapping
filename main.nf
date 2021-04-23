@@ -47,7 +47,7 @@ def helpMessage() {
 }
 
 log.info "=========================================" 
-log.info "F I N E P I P E"
+log.info "F I N E M A P P I N G   P I P E L I N E"
 log.info "IKMB pipeline version v${workflow.manifest.version}" 
 log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
