@@ -2,6 +2,7 @@
 // -*- mode:groovy -*-
 
 //TODO:chunk size test
+//TODO: check for chr3:45800039:A:G as it is right now and possible 1:752721:A:G input in .bim and snplist
 
 def helpMessage() {
   log.info"""
@@ -117,8 +118,8 @@ process subset_sumstats {
     each file(sorted) from snplist_sorted_ch
     each file(summarystats) from summarystats_ch
     output:
-    set val(chunk),file(snplist) into key_snplist_ch
-    set val(chunk),file(zfile) into key_zfile_ch
+    tuple val(chunk),file(snplist) into key_snplist_ch
+    tuple val(chunk),file(zfile) into key_zfile_ch
     tuple val(chunk), file(metal) into metal_ch
     shell:
     
@@ -158,7 +159,7 @@ process plink {
     tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from plink_input_ch
     
     output:
-    set val(chunk),file(ld) into plink_output
+    tuple val(chunk),file(ld) into plink_output
     shell:
     output=chunk
     ld=output+".ld"
@@ -174,9 +175,9 @@ key_zfile_ch1.join(plink_output).into{joinedzfileld_ch;joinedzfileld_ch2}
 process master {
     scratch true
     input:
-    set val(chunk),val(zfile), val(ldfile) from joinedzfileld_ch
+    tuple val(chunk),val(zfile), val(ldfile) from joinedzfileld_ch
     output:
-    set val(chunk), file(output) into master_output_ch
+    tuple val(chunk), file(output) into master_output_ch
     script:
     output=chunk+"_output.master"
     """
@@ -202,7 +203,7 @@ if(params.method == "sss"){
       file(error_finemap) optional true 
       file('*.cred*')
       file('*.cred') optional true
-      set val(chunk), file(NAME) into finemap_output_ch
+      tuple val(chunk), file(NAME) into finemap_output_ch
       shell:
       error_finemap="error_finemap.log"
       NAME=chunk+".cred"+params.nsignal
@@ -233,7 +234,7 @@ if(params.method == "sss"){
       file(error_finemap) optional true 
       file('*.cred*') optional true
       file('*.cred') optional true
-      set val(chunk), file(NAME) into finemap_output_ch
+      tuple val(chunk), file(NAME) into finemap_output_ch
       shell:
       error_finemap="error_finemap.log"
       NAME=chunk+".cred"
@@ -295,15 +296,9 @@ if(params.dprime){
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr dprime --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " " \$8}' > $chunkleadsnpld
-      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date --ld-measure 'dprime'
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date --ld-measure 'dprime'
     
       """ 
-
-      /*
-      plink --bfile ../../$3 --extract ../results_$2/$2$chunk.snplist --r2 inter-chr dprime --ld-snp $snp1 --ld-window-r2 0 --a1-allele ../results_$2/$2"$filetag".z 4 1 --from-kb $pl_left_bound --to-kb $pl_right_bound --chr $chromosome --out raw$2.$chunk.$snp1 --threads 4
-      cat raw$2.$chunk.$snp1.ld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print $6 " " $3 " " $7 " " $8}' > $2.$chunk.$snp1.ld
-      locuszoom --metal ../../../$1.metal --refsnp $snp1 --chr $chromosome --start $left_bound --end $right_bound --prefix $chunk --build hg38 --ld ../$2.$chunk.$snp1.ld  fineMap="../$2$chunk.cred.zoom" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime"
-      */
   }
 }else{
   process get_r2_from_single_SNP {
@@ -322,7 +317,7 @@ if(params.dprime){
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
-      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${plink_left_bound} --end ${plink_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR}--start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
     
       """ 
   }
