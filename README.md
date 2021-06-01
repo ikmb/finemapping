@@ -32,3 +32,5 @@ and set profile to local:<br />
 **--dprime**    sets ld method from the default r² to dprime<br />
 **--output** "/path/to/output" if not set output is baseDir/Results<br />
 **-resume** Continue a run with cached processes<br />
+
+If Finemap is always failing, you can still get a locuszoom plot with "--onlylocus"

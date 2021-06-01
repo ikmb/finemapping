@@ -151,6 +151,59 @@ process subset_sumstats {
 key_zfile_ch.into{key_zfile_ch1;key_zfile_ch2}
 
 key_zfile_ch2.join(key_snplist_ch).join(chunks_ch3).into{plink_input_ch;plink_input_ch2}
+if (params.onlylocus){
+  Channel.fromPath(params.reference).map { file -> tuple(file.baseName, file) }.set{identifier_ch_onlylocus}
+  plink_input_ch2.join(metal_ch).set{onlylocus_ch}
+
+  identifier_ch_onlylocus.combine(onlylocus_ch)set{onlylocus_ch1}
+if(params.dprime){
+  process onlylocus_get_dprime_from_single_SNP {
+      scratch true
+      label 'locuszoom'
+      publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
+      input:
+      each file(summarystats) from summarystats_ch2
+      tuple datasetID, datasetFile,val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1,file(metal) from onlylocus_ch1
+
+      //tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
+      output:
+      file('**/*')
+      shell:
+      rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
+      chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
+      outputdir="${chunk}_chr${CHR}_*"
+      """
+      plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr dprime --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
+      cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " " \$8}' > $chunkleadsnpld
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR} --start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" ldCol="dprime" --no-date --ld-measure 'dprime'
+    
+      """ 
+  }
+}else{
+  process onlylocus_get_r2_from_single_SNP {
+      scratch true
+      label 'locuszoom'
+      publishDir "${params.output}/${datasetID}/${chunk}/", mode: 'copy'
+      input:
+      each file(summarystats) from summarystats_ch2
+      //tuple val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1, path(finemap) ,val(datasetID), path(datasetFile),file(credzoom),file(metal) from get_r2_from_single_SNP_input
+      tuple datasetID, datasetFile,val(chunk),file(zfile),file(snplist),first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1,file(metal) from onlylocus_ch1
+
+      output:
+      file('**/*')
+      shell:
+      rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
+      chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
+      outputdir="${chunk}_chr${CHR}_*"
+      """
+      plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
+      cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR} --start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
+    
+      """ 
+  }
+}
+}else{
 
 process plink {
     scratch true
@@ -321,6 +374,7 @@ if(params.dprime){
     
       """ 
   }
+}
 }
 workflow.onComplete { 
 	log.info ( workflow.success ? "\nDone! Open the following directory for the outputs --> $params.output\n" : "Oops .. something went wrong" )

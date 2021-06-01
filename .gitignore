@@ -5,3 +5,9 @@ finepipe.sif
 .nextflow/
 work/
 example/
+m2zfast.conf
+m2zfast.py
+cache/
+aufruf.sh
+Results/
+flowchart.*
