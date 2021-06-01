@@ -33,4 +33,4 @@ and set profile to local:<br />
 **--output** "/path/to/output" if not set output is baseDir/Results<br />
 **-resume** Continue a run with cached processes<br />
 
-If Finemap is always failing, you can still get a locuszoom plot with "--onlylocus"
+If Finemap is always failing, you can still get a locuszoom plot with **--onlylocus**
