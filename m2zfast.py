@@ -2,6 +2,7 @@
 
 #===============================================================================
 # Copyright (C) 2010 Ryan Welch, Randall Pruim
+# edited by F. Uellendahl-Werth (f.uellendahl-werth@ikmb.uni-kiel.de) 2021
 # 
 # LocusZoom is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
