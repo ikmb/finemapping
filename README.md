@@ -15,6 +15,7 @@ Pipeline needs 6 input files:<br />
   * st: coordinate where plotting starts
   * sp: coordinate where plotting ends
   * PPA_3: currently not in use, put in 1
+
 **SNP-List**: file with 1 snp per row, all other SNPs are excluded drom plotting and finemapping<br />
 **SUMSTAT-FILE**: file containing following columns:<br />
      CHR	BP	SNP	A1	A2	P	OR	BETA	SE	N	CHISQ	Z	SOURCE	FRQ_A_A1	FRQ_U_A1	INFO<br />
