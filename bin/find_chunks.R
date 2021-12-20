@@ -36,7 +36,7 @@ if(chunk_mode=="PWGWAS"){
   for (i in 1:(dim(AB_overlap)[1])) {
     AB_overlap[j,"chunk"] <- chunk_num
     if(j<dim(AB_overlap)[1]){
-      if (AB_overlap[j+1,chr]==AB_overlap[j,chr] && AB_overlap[j+1,chunk_PW&&F] == AB_overlap[j,chunk_PW] + 1){ #condition deactivated by insertion of &&F
+      if (AB_overlap[j+1,chr] == AB_overlap[j,chr] && (AB_overlap[j+1,chunk_PW] == AB_overlap[j,chunk_PW] + 1) && FALSE){ #condition deactivated by insertion of &&F
         chunk_num <- chunk_num}
       else{chunk_num<-chunk_num+1}
       j<-j+1
