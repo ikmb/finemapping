@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 args = commandArgs(trailingOnly=TRUE)
+credCutoff=0.01
 #args = c("/home/sukmb465/Documents/Eike/Nextflow/finepipe/Results/GerNorItaSpa/2/cred/", "sss", 1, 2, "GerNorItaSpa")
 #args = list("SCZ","CD")
 if (length(args)!=4) {
@@ -60,7 +61,9 @@ fmapforlocuszoom<-function(tag=tag,output_dir){
       
       finemap_reformat <- data.table(snp=snp_vector, pp=pp_vector, group=group_vector, color=color_vector)
       
-      #finemap_reformat <- finemap_reformat[pp>=0.01,] #if you take this out, the 95% credible set will contain some genes which have less than 1 % pp
+      if (exists("credCutoff")){
+      	finemap_reformat <- finemap_reformat[pp>=credCutoff,] #if you take this out, the 95% credible set will contain some genes which have less than 1 % pp
+      }
       finemap_reformat <- finemap_reformat[sum_stats[,.(rsid,chromosome,position)],on="snp==rsid",nomatch=NULL]
       finemap_reformat<-finemap_reformat[,.(snp,chromosome,position,pp,group,color)]
       colnames(finemap_reformat) <- c("snp","chr","pos","pp","group","color")
