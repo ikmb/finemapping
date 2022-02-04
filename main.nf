@@ -42,6 +42,7 @@ def helpMessage() {
   Optonal arguments:
   --dprime        result in d-prime instead of r2
   -profile      	The nextflow execution profile to use, standard is medcluster ("local" or "standard")
+  -resume         Continue the workflow
   """.stripIndent()
 }
 
@@ -73,10 +74,32 @@ if (params.help){
 	exit 0
 }
 
+
+process set_snps {
+  scratch true
+  input:
+  output:
+  file(thesnplist) into thesnplist_ch
+  shell:
+  thesnplist = "thesnplist.txt"
+  """
+  if [ -f "!{params.snps}"]
+  then
+   awk '{print \$2}' !{params.reference}.bim | sort -u > $thesnplist
+  else  
+    sort -u !{params.snps}  > $thesnplist
+  fi
+  """
+
+}
+
+thesnplist_ch.into{ thesnplist_ch2;thesnplist_ch3 }
+
 process find_chunks {
     scratch true
     label 'Rscript'
     input:
+    file(thesnpslist) from thesnplist_ch2
     output:
     file(chunk_tbl) into chunk_tbl_ch
     
@@ -85,14 +108,14 @@ process find_chunks {
     chunk_chunk = "chunk_chunk.csv"
     chunk_tbl = "chunk_tbl.csv"
     """
-    Rscript $baseDir/bin/find_chunks.R ${params.locus} ${params.sumstats} ${params.reference} ${params.snps}
+    Rscript $baseDir/bin/find_chunks.R ${params.locus} ${params.sumstats} ${params.reference} ${thesnpslist}
     """ 
 }
 
 chunk_tbl_ch.splitCsv(header: true, sep:',').map{it ->[it.chunk,it.first_gene_start,it.last_gene_end,it.CHR,it.left_cis_boundary,it.right_cis_boundary,it.plink_left_bound,it.plink_right_bound,it.subset_left_bound,it.subset_right_bound,it.n_genes,it.leadSNP_1 ]}.into {chunks_ch2; chunks_ch3}
 
 
-process sort.snplist {
+process sort_snplist {
   scratch true
   input:
   output:
@@ -109,12 +132,13 @@ process sort.snplist {
 Channel.fromPath(params.sumstats, checkIfExists: true).into{ summarystats_ch; summarystats_ch2 }
 
 process subset_sumstats {
-    scratch true
+    scratch false
     beforeScript 'ulimit -Ss unlimited'   
     input:
     tuple chunk,first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from chunks_ch2
     each file(sorted) from snplist_sorted_ch
     each file(summarystats) from summarystats_ch
+    each file(thesnpslist) from thesnplist_ch3
     output:
     tuple val(chunk),file(snplist) into key_snplist_ch
     tuple val(chunk),file(zfile) into key_zfile_ch
@@ -127,6 +151,7 @@ process subset_sumstats {
   	filetag=chunk
     zraw=filetag+".txt"
     snplistraw=filetag+"_snplistraw"
+    presnplist=filetag+"_presnplist"
     snplist=filetag+"_snplist"
     zfile=filetag+".z"
     metal=filetag+".metal"
@@ -135,8 +160,10 @@ process subset_sumstats {
   	cat !{params.sumstats}| awk 'BEGIN {CONVFMT = "%.6e"; OFMT = "%.6e"; print "rsid chromosome position allele1 allele2 maf beta se"} NR!=1 {print \$3 " " \$1 " " \$2 " " \$4 " " \$5 " " \$14 " " \$8 " " \$9}' | gawk 'BEGIN {CONVFMT = "%.6e"; OFMT = "%.6e"; print "rsid chromosome position allele1 allele2 maf beta se"} (NR!=1 && \$2 == '$chromosome' && \$3 > '$left_bound' && \$3 < '$right_bound') {print }' | awk 'BEGIN {print "rsid chromosome position allele1 allele2 maf beta se"}{if (NR!=1 && \$6 <= 0.5) {print } ;if (NR!=1 && \$6 > 0.5) {mafcor = 1 - \$6; minusbeta = -1 * \$7; print \$1 " " \$2 " " \$3 " " \$5 " " \$4 " " mafcor " " minusbeta " " \$8}}' | awk 'BEGIN {print "rsid chromosome position allele1 allele2 maf beta se"}{if (NR!=1 && \$6 >= 0.0) {print }}' >> $zraw 
     cat $zraw | gawk 'NR!=1{print \$1}' | sort -u > $snplistraw
         #now save the real snplist as the comm of two snplists. Each one has to be sorted!!!
-	  #CHANGED BY Mareike (to consider snplist): comm -12 <(cat $snplistraw) <(cat $sorted) > $snplist
-	  comm -12 <(cat $snplistraw) <(cat $sorted)|grep -F -f !{params.snps} > $snplist
+	  #CHANGED BY Mareike (to consider snplist): 
+    comm -12 <(cat $snplistraw) <(cat $sorted) | sort -u > $presnplist
+    comm -12 <(cat $presnplist) <(cat !{thesnpslist} | sort -u) > $snplist
+	  #comm -12 <(cat $snplistraw) <(cat $sorted)|grep -F -f !{thesnpslist} > $snplist
 
         #now subset the zfile to be concordant with the snplist
 	  head -n 1 $zraw > $zfile
