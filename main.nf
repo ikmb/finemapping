@@ -27,8 +27,9 @@ def helpMessage() {
 
   --snps            A sorted file with all the SNPs in the loci 
                     (every other marker will be filtered out),
-                    without the header of the reference bimbedfam like
-  --nsum            Number of probands in reference population
+                    without the header of the reference bimbedfam like.  
+                    Default is all rsids from reference bim file
+  --nsum            Number of probands in reference population.
 
   --method          Method of Finemap (sss or cond)
 
@@ -85,9 +86,9 @@ process set_snps {
   """
   if [ -f "!{params.snps}"]
   then
-   awk '{print \$2}' !{params.reference}.bim | sort -u > $thesnplist
-  else  
     sort -u !{params.snps}  > $thesnplist
+  else  
+    awk '{print \$2}' !{params.reference}.bim | sort -u > $thesnplist
   fi
   """
 
