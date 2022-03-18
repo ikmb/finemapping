@@ -16,6 +16,9 @@ args = commandArgs(trailingOnly=TRUE)
 library(data.table)
 AB_overlap <- fread(args[[1]])
 sumstats1<-fread(args[[2]])
+ref<-args[[3]]
+snps<-fread(args[[4]],header=FALSE)$V1#added to consider snp list (in conflict with UTMOST case -> either remove l76ff or change args)
+print("read in all files")
 #sumstats2<-fread(args[[3]])
 #tag1<-args[[3]]
 #tag2<-args[[5]]
@@ -42,7 +45,9 @@ if(chunk_mode=="PWGWAS"){
       j<-j+1
     }
   }
+  print(AB_overlap)
   fwrite(AB_overlap, file = paste0("chunk_chunk.csv"), sep = ",")
+  print("Written chunk_chunk.csv")
   #group by chunk to 
   n_chunks <- max(AB_overlap[,chunk])
   chunk_tbl <- data.table(chunk=1:n_chunks, 
@@ -56,14 +61,17 @@ if(chunk_mode=="PWGWAS"){
                                                            ][,subset_right_bound:=plink_right_bound*1000]
   n_genes=AB_overlap[, .N, by=chunk][,N]
   chunk_tbl<-cbind(chunk_tbl, n_genes)
-  findleadSNP<-function(sumstats,chromosome,subset_left_bound,subset_right_bound){
-    DT<-sumstats[CHR==chromosome&BP>=subset_left_bound&BP<=subset_right_bound,.(SNP,P)]#[P==min(P),SNP]
+  print(chunk_tbl)
+  findleadSNP<-function(sumstats,chromosome,subset_left_bound,subset_right_bound,snps){
+    DT<-sumstats[CHR==chromosome&BP>=subset_left_bound&BP<=subset_right_bound&SNP%in%snps,.(SNP,P)]#[P==min(P),SNP]
     leadSNP<-DT[P==min(P),SNP][1]
+    print(leadSNP)
     return(leadSNP)
   }
-  chunk_tbl[,paste0("leadSNP_","1"#,args[[3]]
+  print("looking for the leadSNP...")
+  chunk_tbl[,paste0("leadSNP_","1"#,ref
   ):=mapply(findleadSNP,chromosome=CHR,subset_left_bound=subset_left_bound,
-                                                  subset_right_bound=subset_right_bound, MoreArgs = list(sumstats=sumstats1))]
+                                                  subset_right_bound=subset_right_bound, MoreArgs = list(sumstats=sumstats1,snps=snps))]
 #  chunk_tbl[,paste0("leadSNP_",args[[5]]):=mapply(findleadSNP,chromosome=CHR,subset_left_bound=subset_left_bound,
 #                                                  subset_right_bound=subset_right_bound, MoreArgs = list(sumstats=sumstats2))]
   ###
@@ -92,6 +100,7 @@ if(chunk_mode=="UTMOST"){
     }
   }
   fwrite(AB_overlap, file = paste0("gene_chunk.csv"), sep = ",")
+  print("written gene_chunk")
   #group by chunk to 
   n_chunks <- max(AB_overlap[,chunk])
   chunk_tbl <- data.table(chunk=1:n_chunks, 
@@ -109,7 +118,8 @@ if(chunk_mode=="UTMOST"){
   ###find the lead SNP in each chunk which is at least 100kb from the side for each disease. 
   findleadSNP<-function(sumstats,chromosome,subset_left_bound,subset_right_bound){
     DT<-sumstats[CHR==chromosome&BP>=subset_left_bound&BP<=subset_right_bound,.(SNP,P)]#[P==min(P),SNP]
-    leadSNP<-DT[P==min(P),SNP]
+    leadSNP<-DT[P==min(P),SNP][1]
+    print(leadSNP)
     return(leadSNP)
   }
   ###fallback if the code below with mapply should cause problems

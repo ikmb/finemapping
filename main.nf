@@ -13,8 +13,7 @@ def helpMessage() {
   The typical command for running the pipeline is as follows:
   nextflow run IKMB/Finepipe --locus '/path/to/locusfile.sample' 
   Mandatory arguments:
-  --locus 		The path to the .csv-File containing following 
-                    columns: chunk,NSNP,chr,st,sp,PPA_3
+  --locus 		The path to the .csv-File containing following columns: chunk,NSNP,chr,st,sp,PPA_3
 
   --sumstats        Summary stats
                     Header must exactly be:
@@ -28,15 +27,15 @@ def helpMessage() {
 
   --snps            A sorted file with all the SNPs in the loci 
                     (every other marker will be filtered out),
-                    without the header of the reference bimbedfam like
-  --nsum            Number of probands in reference population
+                    without the header of the reference bimbedfam like.  
+                    Default is all rsids from reference bim file
+  --nsum            Number of probands in reference population.
 
   --method          Method of Finemap (sss or cond)
 
   --nsignal         n of causal signals
 
-  --locuszoomdb     location of locusZoom Db
-
+  --locuszoomdb     location of locusZoom Db 
   --output          directory for result files
 
   
@@ -44,6 +43,7 @@ def helpMessage() {
   Optonal arguments:
   --dprime        result in d-prime instead of r2
   -profile      	The nextflow execution profile to use, standard is medcluster ("local" or "standard")
+  -resume         Continue the workflow
   """.stripIndent()
 }
 
@@ -75,10 +75,32 @@ if (params.help){
 	exit 0
 }
 
+
+process set_snps {
+  scratch true
+  input:
+  output:
+  file(thesnplist) into thesnplist_ch
+  shell:
+  thesnplist = "thesnplist.txt"
+  """
+  if [ -f "!{params.snps}"]
+  then
+    sort -u !{params.snps}  > $thesnplist
+  else  
+    awk '{print \$2}' !{params.reference}.bim | sort -u > $thesnplist
+  fi
+  """
+
+}
+
+thesnplist_ch.into{ thesnplist_ch2;thesnplist_ch3 }
+
 process find_chunks {
     scratch true
     label 'Rscript'
     input:
+    file(thesnpslist) from thesnplist_ch2
     output:
     file(chunk_tbl) into chunk_tbl_ch
     
@@ -87,14 +109,14 @@ process find_chunks {
     chunk_chunk = "chunk_chunk.csv"
     chunk_tbl = "chunk_tbl.csv"
     """
-    Rscript $baseDir/bin/find_chunks.R ${params.locus} ${params.sumstats} ${params.reference}
+    Rscript $baseDir/bin/find_chunks.R ${params.locus} ${params.sumstats} ${params.reference} ${thesnpslist}
     """ 
 }
 
 chunk_tbl_ch.splitCsv(header: true, sep:',').map{it ->[it.chunk,it.first_gene_start,it.last_gene_end,it.CHR,it.left_cis_boundary,it.right_cis_boundary,it.plink_left_bound,it.plink_right_bound,it.subset_left_bound,it.subset_right_bound,it.n_genes,it.leadSNP_1 ]}.into {chunks_ch2; chunks_ch3}
 
 
-process sort.snplist {
+process sort_snplist {
   scratch true
   input:
   output:
@@ -111,12 +133,13 @@ process sort.snplist {
 Channel.fromPath(params.sumstats, checkIfExists: true).into{ summarystats_ch; summarystats_ch2 }
 
 process subset_sumstats {
-    scratch true
+    scratch false
     beforeScript 'ulimit -Ss unlimited'   
     input:
     tuple chunk,first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from chunks_ch2
     each file(sorted) from snplist_sorted_ch
     each file(summarystats) from summarystats_ch
+    each file(thesnpslist) from thesnplist_ch3
     output:
     tuple val(chunk),file(snplist) into key_snplist_ch
     tuple val(chunk),file(zfile) into key_zfile_ch
@@ -129,6 +152,7 @@ process subset_sumstats {
   	filetag=chunk
     zraw=filetag+".txt"
     snplistraw=filetag+"_snplistraw"
+    presnplist=filetag+"_presnplist"
     snplist=filetag+"_snplist"
     zfile=filetag+".z"
     metal=filetag+".metal"
@@ -137,14 +161,18 @@ process subset_sumstats {
   	cat !{params.sumstats}| awk 'BEGIN {CONVFMT = "%.6e"; OFMT = "%.6e"; print "rsid chromosome position allele1 allele2 maf beta se"} NR!=1 {print \$3 " " \$1 " " \$2 " " \$4 " " \$5 " " \$14 " " \$8 " " \$9}' | gawk 'BEGIN {CONVFMT = "%.6e"; OFMT = "%.6e"; print "rsid chromosome position allele1 allele2 maf beta se"} (NR!=1 && \$2 == '$chromosome' && \$3 > '$left_bound' && \$3 < '$right_bound') {print }' | awk 'BEGIN {print "rsid chromosome position allele1 allele2 maf beta se"}{if (NR!=1 && \$6 <= 0.5) {print } ;if (NR!=1 && \$6 > 0.5) {mafcor = 1 - \$6; minusbeta = -1 * \$7; print \$1 " " \$2 " " \$3 " " \$5 " " \$4 " " mafcor " " minusbeta " " \$8}}' | awk 'BEGIN {print "rsid chromosome position allele1 allele2 maf beta se"}{if (NR!=1 && \$6 >= 0.0) {print }}' >> $zraw 
     cat $zraw | gawk 'NR!=1{print \$1}' | sort -u > $snplistraw
         #now save the real snplist as the comm of two snplists. Each one has to be sorted!!!
-	  comm -12 <(cat $snplistraw) <(cat $sorted) > $snplist
+	  #CHANGED BY Mareike (to consider snplist): 
+    comm -12 <(cat $snplistraw) <(cat $sorted) | sort -u > $presnplist
+    comm -12 <(cat $presnplist) <(cat !{thesnpslist} | sort -u) > $snplist
+	  #comm -12 <(cat $snplistraw) <(cat $sorted)|grep -F -f !{thesnpslist} > $snplist
 
         #now subset the zfile to be concordant with the snplist
 	  head -n 1 $zraw > $zfile
 	  grep -Fwf $snplist $zraw >> $zfile
 	  echo -e 'MarkerName\tP-value' >> $metal
 
-	  join -1 1 -2 3 -o 1.1,2.6 -t \$'\t' <(sort $snplist) <(sort -k 3 !{params.sumstats}) >> $metal
+          grep -f $snplist !{params.sumstats} | cut -f3,6 >> $metal
+	  #CHANGED BY Mareike (I guess the old version is better but failed for some reason) #join -1 1 -2 3 -o 1.1,2.6 -t \$'\t' <(sort $snplist) <(sort -k 3 !{params.sumstats}) >> $metal
     """
 } 
 
@@ -317,7 +345,7 @@ if(params.dprime){
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
-      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR} --start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
+      /opt/locuszoom/locuszoom/bin/locuszoom --metal "${metal}" --refsnp "${leadSNP_1}" --chr ${CHR} --start ${subset_left_bound} --end ${subset_right_bound} --prefix ${chunk} --gwas-cat whole-cat_significant-only --build hg38 --ld $chunkleadsnpld --db "${params.locuszoomdb}" fineMap="${credzoom}" showAnnot=T showRefsnpAnnot=T annotPch="24,24,25,25,22,22,8,7,21" --no-date 
     
       """ 
   }
