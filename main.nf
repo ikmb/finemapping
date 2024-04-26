@@ -84,7 +84,7 @@ process set_snps {
   shell:
   thesnplist = "thesnplist.txt"
   """
-  if [ -f "!{params.snps}"]
+  if [ -f "!{params.snps}" ]
   then
     sort -u !{params.snps}  > $thesnplist
   else  
@@ -126,14 +126,15 @@ process sort_snplist {
   sorted = "reference_snplist_sorted.txt"
   """
   
-  gawk -F \$'\t' '{print \$2}' !{params.reference}.bim | sort > reference_snplist_sorted.txt
+  gawk '{print \$2}' !{params.reference}.bim | sort > reference_snplist_sorted.txt
   """
 }
 
+// -F \$'\t'
 Channel.fromPath(params.sumstats, checkIfExists: true).into{ summarystats_ch; summarystats_ch2 }
 
 process subset_sumstats {
-    scratch false
+    scratch true
     beforeScript 'ulimit -Ss unlimited'   
     input:
     tuple chunk,first_gene_start,last_gene_end,CHR,left_cis_boundary,right_cis_boundary,plink_left_bound,plink_right_bound,subset_left_bound,subset_right_bound,n_genes,leadSNP_1 from chunks_ch2
@@ -171,7 +172,7 @@ process subset_sumstats {
 	  grep -Fwf $snplist $zraw >> $zfile
 	  echo -e 'MarkerName\tP-value' >> $metal
 
-          grep -f $snplist !{params.sumstats} | cut -f3,6 >> $metal
+          grep -f $snplist !{params.sumstats} | awk -v OFS="\\t" '\$1=\$1' |cut -f3,6 >> $metal
 	  #CHANGED BY Mareike (I guess the old version is better but failed for some reason) #join -1 1 -2 3 -o 1.1,2.6 -t \$'\t' <(sort $snplist) <(sort -k 3 !{params.sumstats}) >> $metal
     """
 } 
@@ -290,7 +291,7 @@ finemap_output_ch.combine(identifier_ch2).into{prep_finemap_locuszoom_ch;prep_fi
 joinedzfileld_ch2.join(prep_finemap_locuszoom_ch).set{prep_finemap_locuszoom_input}
 
 process prep_finemap_locuszoom {
-    //scratch true
+    scratch true
     label 'Rscript'
     input:
     tuple val(chunk),file(zfile), val(ldfile), file(finemap),val(datasetID), path(datasetFile) from prep_finemap_locuszoom_input
@@ -321,6 +322,7 @@ if(params.dprime){
       rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
       chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
       outputdir="${chunk}_chr${CHR}_*"
+      //outputdir="${chunk}_${CHR}_*"
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr dprime --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " " \$8}' > $chunkleadsnpld
@@ -342,6 +344,7 @@ if(params.dprime){
       rawld="raw${datasetID}.${chunk}.${leadSNP_1}.ld"
       chunkleadsnpld="${datasetID}.${chunk}.${leadSNP_1}.ld"
       outputdir="${chunk}_chr${CHR}_*"
+      //outputdir="${chunk}_${CHR}_*"
       """
       plink --bfile ${params.reference} --extract ${snplist} --r2 inter-chr --ld-snp ${leadSNP_1} --ld-window-r2 0 --a1-allele ${zfile} 4 1 --from-kb ${plink_left_bound} --to-kb ${plink_right_bound} --chr ${CHR} --out raw${datasetID}.${chunk}.${leadSNP_1} --threads ${task.cpus}
       cat $rawld | awk 'BEGIN{print "snp1 snp2 rsquare dprime"} NR!=1 {print \$6 " " \$3 " " \$7 " NA"}' > $chunkleadsnpld
